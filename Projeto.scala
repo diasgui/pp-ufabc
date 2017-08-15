@@ -19,16 +19,8 @@ object ProduzRelatorio {
   
   var Banco: Map[Int, Double] = Map();
   
-  class Confere extends Actor {
-
-    def conta(texto: String, palavra: String): Int = {
-      def go(palavras: Array[String], ret: Int): Int = {
-        if (palavras.isEmpty) ret
-        else if (palavras.head == palavra) go(palavras.tail, ret + 1)
-        else go(palavras.tail, ret)
-      }
-      go(texto.split(" "), 0)
-    }
+  //Esta classe funciona como um adm, ela recebe uma tarefa e responde o montante que ficará na conta que sofreu a alteração
+  class Adm extends Actor {
 
     def receive = {
       case Saque(conta, quantia) => {
@@ -41,7 +33,7 @@ object ProduzRelatorio {
   }
   
   def Colocar(conta: Int,qtd: Double): Unit= synchronized{ 
-    
+    Banco = Banco+(conta -> qtd)
   }
   
   class Cliente(servidor: ActorRef) extends Actor {
@@ -59,7 +51,9 @@ object ProduzRelatorio {
   }
   
   def main(args: Array[String]): Unit = {
-    
+    val system = ActorSystem("System")
+    val servidor = system.actorOf(Props[Adm])
+    val cliente = system.actorOf(Props(new Cliente(servidor)))
     
     
   }
