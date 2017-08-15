@@ -24,11 +24,14 @@ object ProduzRelatorio {
   case class Deposito(conta: Int,quantia: Double,Agencia:BancoDeDados)
   case class Transferencia(mensageiro: Int,quantia: Double,receptor:Int,Agencia:BancoDeDados)
   case class Extrato(conta: Int,Agencia:BancoDeDados)
-  case class Resposta(conta: Int, montante: Double)
+  case class Resposta(conta: Int, montante: Double, Agencia:BancoDeDados)
+  case class NovaVazia(conta: Int, Agencia:BancoDeDados)
+  case class NovaCheia(conta: Int, quantia: Double, Agencia:BancoDeDados)
   
   
   class BancoDeDados{
     var Banco: Map[Int, Double] = Map();
+    def Consultar(x:Int) = synchronized{Banco(x)}
     def Colocar(conta: Int, quantia: Double) = synchronized{Banco = Banco+(conta->quantia)}
     def Colocar(conta:Int) = synchronized{Banco = Banco + (conta->0)}
     def Remover(conta:Int) = synchronized{Banco = Banco - conta}
@@ -39,26 +42,33 @@ object ProduzRelatorio {
 
     def receive = {
       case Saque(conta, quantia,agencia) => {
-        if(agencia.Banco(conta)>quantia)  sender() ! Resposta(conta,agencia.Banco(conta) - quantia)
-        else sender() ! Resposta(conta,-1)
+        //println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas perdeu " +quantia)
+        if(agencia.Consultar(conta)>quantia)  sender() ! Resposta(conta,agencia.Consultar(conta) - quantia,agencia)
+        else sender() ! Resposta(conta,-1, agencia)
       }
-      case Deposito(conta, quantia,agencia) => sender() ! Resposta(conta,quantia + agencia.Banco(conta))
+      case Deposito(conta, quantia,agencia) =>{
+        //println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas ganhou " +quantia)
+        sender() ! Resposta(conta,quantia + agencia.Consultar(conta), agencia)
+      }
     }
     
   }
   
   
-  class Cliente(servidor: ActorRef, Agencia: BancoDeDados) extends Actor {
+  class Cliente(servidor: ActorRef) extends Actor {
 
     def receive = {
-      case Resposta(c,-1) => println("Valor indisponível para saque na conta "+c) 
-      case Resposta(c,q) => Agencia.Colocar(c,q)
-      case Deposito(c,q,Agencia) => servidor ! Deposito(c,q,Agencia)
-      case Saque(c,q,Agencia) => servidor ! Saque(c,q,Agencia)
-      case Transferencia(msg,qtd,rcp,Agencia) =>{
-        if(Agencia.Banco(msg)>=qtd){
-          servidor ! Saque(msg, qtd,Agencia)
-          servidor ! Deposito(rcp, qtd,Agencia)
+      case Resposta(c,-1, agencia) => println("Valor indisponível para saque na conta "+c) 
+      case Resposta(c,q, agencia) =>{
+        //println("A conta " +c+ " estava com " +agencia.Consultar(c)+ " ficou com "+q)
+        agencia.Colocar(c,q)
+      }
+      case Deposito(c,q,agencia) => servidor ! Deposito(c,q,agencia)
+      case Saque(c,q,agencia) => servidor ! Saque(c,q,agencia)
+      case Transferencia(msg,qtd,rcp,agencia) =>{
+        if(agencia.Consultar(msg)>=qtd){
+          servidor ! Saque(msg, qtd,agencia)
+          servidor ! Deposito(rcp, qtd,agencia)
         }
         else{
           println("Saque não efetuado, pois o usuário não possui essa quantia")
@@ -67,24 +77,38 @@ object ProduzRelatorio {
     }
   }
   
+  class Gerador extends Actor {
+
+    def receive = {
+      case NovaVazia(a, agencia) => agencia.Colocar(a)
+      case NovaCheia(a, qtd, agencia) => agencia.Colocar(a,qtd)
+    }
+  }
+  
   def main(args: Array[String]): Unit = {
     val system = ActorSystem("System")
     val servidor = system.actorOf(Props[Adm])
+    val gerador = system.actorOf(Props[Gerador])
+    val cliente = system.actorOf(Props(new Cliente(servidor)))
     val Agencia = new BancoDeDados;
 
     //Por motivos de teste, vamos adicionar alguns usuários
-    Agencia.Colocar(1)
-    Agencia.Colocar(2,1000)
-    Agencia.Colocar(3,40000)
-    Agencia.Colocar(4,2750)
+    gerador ! NovaVazia(1, Agencia)
+    gerador ! NovaCheia(2,1000,Agencia)
+    gerador ! NovaCheia(3,40000,Agencia)
+    gerador ! NovaCheia(4,2750,Agencia)
     
-    val cliente = system.actorOf(Props(new Cliente(servidor,Agencia)))
     cliente ! Saque(3, 10000, Agencia)
+    Thread.sleep(200)
     cliente ! Transferencia(2,500,1,Agencia)
+    Thread.sleep(200)
     cliente ! Deposito(2,700,Agencia)
-    
-    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach(println(_))
+    Thread.sleep(200)
+    cliente ! Transferencia(2,800,4,Agencia)
+
+    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => (println("A conta " +a._1+ " possui " + a._2 + " reais.")))
   }
     
 
 }
+
