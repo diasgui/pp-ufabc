@@ -1,6 +1,8 @@
-//As modificações foram:
+//Modificações cumulativas:
 //Eu mudei o banco de dados de um Map para uma classe para poder sofisticar mais o projeto
 //Eu escrevi um exemplo de main para exemplificar o que o programa faz atualmente
+//Criei um metodo para simular um do-while recursivo (agora temos recursão em cauda)
+//Criei um menu bem simples no main para se ter uma ideia
 
 //O que era importante fazer:
 //Modificar o banco para podermos inserir nome, cpf, aniversario...
@@ -85,6 +87,15 @@ object ProduzRelatorio {
     }
   }
   
+  def repeatLoop(body: => Unit) = new Until(body)
+  // do-while recursivo (tailrec) para criacao do menu no main
+  class Until(body: => Unit) {
+    def until(cond: => Boolean): Unit = { // tailrec
+      body
+      if (cond) until(cond)
+    }
+  }
+  
   def main(args: Array[String]): Unit = {
     val system = ActorSystem("System")
     val servidor = system.actorOf(Props[Adm])
@@ -97,16 +108,37 @@ object ProduzRelatorio {
     gerador ! NovaCheia(2,1000,Agencia)
     gerador ! NovaCheia(3,40000,Agencia)
     gerador ! NovaCheia(4,2750,Agencia)
-    
-    cliente ! Saque(3, 10000, Agencia)
-    Thread.sleep(200)
-    cliente ! Transferencia(2,500,1,Agencia)
-    Thread.sleep(200)
-    cliente ! Deposito(2,700,Agencia)
-    Thread.sleep(200)
-    cliente ! Transferencia(2,800,4,Agencia)
 
-    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => (println("A conta " +a._1+ " possui " + a._2 + " reais.")))
+    var x = -1
+    repeatLoop {
+      println()
+      println("-------------------------")
+      println("1 - Saque         -------")
+      println("2 - Transferencia -------")
+      println("3 - Deposito      -------")
+      println("0 - Sair          -------")
+      println("-------------------------")
+      println()
+      x = scala.io.StdIn.readInt()
+        x match {
+        case 1 =>
+          cliente ! Saque(3, 10000, Agencia)
+          Thread.sleep(200)
+        case 2 =>
+          cliente ! Transferencia(2,500,1,Agencia)
+          Thread.sleep(200)
+
+          cliente ! Transferencia(2,800,4,Agencia)
+          Thread.sleep(200)
+        case 3 =>
+          cliente ! Deposito(2,700,Agencia)
+          Thread.sleep(200)
+        case 0 =>
+          x = -1
+      }
+    } until (x != -1)
+
+    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("A conta " +a._1+ " possui " + a._2 + " reais."))
   }
     
 
