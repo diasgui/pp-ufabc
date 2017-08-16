@@ -34,13 +34,15 @@ object ProduzRelatorio {
     def receive = {
 
       case Saque(conta, quantia, agencia) => {
-        println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas perdeu " +quantia)
+        //println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas perdeu " +quantia)
+        println("Conta "+conta+": Saldo antes do saque: R$ "+agencia.Consultar(conta)+". Foi realizado o saque de: R$ "+quantia+".")
         if(agencia.Consultar(conta) > quantia)  sender() ! Resposta(conta, agencia.Consultar(conta) - quantia, agencia)
         else sender() ! Resposta(conta, -1, agencia)
       }
 
       case Deposito(conta, quantia, agencia) => {
-        println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas ganhou " +quantia)
+        //println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas ganhou " +quantia)
+        println("Conta "+conta+": Saldo antes do depósito: R$" +agencia.Consultar(conta)+". Foi realizado o depósito de: R$ "+quantia+".")
         sender() ! Resposta(conta, quantia + agencia.Consultar(conta), agencia)
       }
     }
@@ -53,7 +55,7 @@ object ProduzRelatorio {
       case Resposta(c,-1, agencia) => println("Valor indisponível para saque na conta "+c)
 
       case Resposta(c, q, agencia) => {
-        println("A conta " +c+ " estava com " +agencia.Consultar(c)+ " ficou com "+q)
+        println("Conta " +c+ ": Estava com saldo de R$ " +agencia.Consultar(c)+ ". Passou a ter saldo de R$ "+q+".")
         agencia.Colocar(c,q)
       }
       case Deposito(c, q, agencia) => servidor ! Deposito(c, q, agencia)
@@ -66,7 +68,7 @@ object ProduzRelatorio {
           servidor ! Deposito(rcp, qtd, agencia)
         }
         else{
-          println("Saque não efetuado, pois o usuário não possui essa quantia")
+          println("Saque não efetuado, pois o usuário não saldo suficiente.")
         }
       }
 
@@ -120,6 +122,10 @@ object ProduzRelatorio {
     gerador ! NovaCheia(3,40000,Agencia)
     gerador ! NovaCheia(4,2750,Agencia)
 
+    // Motidos de debug, para comparar com o final.
+    println("Contas Iniciais: ")
+    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
+
     var x = -1
     repeatLoop {
       println()
@@ -149,8 +155,8 @@ object ProduzRelatorio {
       }
     } until (x != -1)
 
-    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("A conta " +a._1+ " possui " + a._2 + " reais."))
+    // Motivos de Debug
+    println("Contas resultantes (Após as operações): ")
+    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
   }
-
-
 }
