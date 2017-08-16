@@ -12,11 +12,11 @@ import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 
 object ProduzRelatorio {
-  case class Saque(conta: Int, quantia: Double, Agencia: BancoDeDados)
-  case class Deposito(conta: Int, quantia: Double, Agencia: BancoDeDados)
-  case class Transferencia(mensageiro: Int, quantia: Double, receptor: Int, Agencia: BancoDeDados)
+  case class Saque(conta: Int, quantia: Double, Agencia: BancoDeDados, op: Int) // Coloquei esse op para ser operação de imprimir ou nao
+  case class Deposito(conta: Int, quantia: Double, Agencia: BancoDeDados, op: Int)
+  case class Transferencia(mensageiro: Int, quantia: Double, receptor: Int, Agencia: BancoDeDados, op: Int)
   case class Extrato(conta: Int, Agencia: BancoDeDados, tipo: Int) // coloquei esse terceiro parametro para CC ou Poupanca
-  case class Resposta(conta: Int, montante: Double, Agencia: BancoDeDados)
+  case class Resposta(conta: Int, montante: Double, Agencia: BancoDeDados, op: Int)
   case class NovaVazia(conta: Int, Agencia: BancoDeDados)
   case class NovaCheia(conta: Int, quantia: Double, Agencia: BancoDeDados)
 
@@ -33,17 +33,19 @@ object ProduzRelatorio {
 
     def receive = {
 
-      case Saque(conta, quantia, agencia) => {
-        //println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas perdeu " +quantia)
-        println("Conta "+conta+": Saldo antes do saque: R$ "+agencia.Consultar(conta)+". Foi realizado o saque de: R$ "+quantia+".")
-        if(agencia.Consultar(conta) > quantia)  sender() ! Resposta(conta, agencia.Consultar(conta) - quantia, agencia)
-        else sender() ! Resposta(conta, -1, agencia)
+      case Saque(conta, quantia, agencia, op) => {
+        if (op == 1) // op == 1 -> imprimir o resultado do saque. op == 0 -> Não imprimir, saque sendo realizado em background
+          println("Conta "+conta+": Saldo antes do saque: R$ "+agencia.Consultar(conta)+". Foi realizado o saque de: R$ "+quantia+".")
+
+        if(agencia.Consultar(conta) > quantia)  sender() ! Resposta(conta, agencia.Consultar(conta) - quantia, agencia, op)
+        else sender() ! Resposta(conta, -1, agencia, op)
       }
 
-      case Deposito(conta, quantia, agencia) => {
-        //println("A conta " +conta+ " estava com " +agencia.Consultar(conta)+ " mas ganhou " +quantia)
-        println("Conta "+conta+": Saldo antes do depósito: R$" +agencia.Consultar(conta)+". Foi realizado o depósito de: R$ "+quantia+".")
-        sender() ! Resposta(conta, quantia + agencia.Consultar(conta), agencia)
+      case Deposito(conta, quantia, agencia, op) => {
+        if (op == 1)
+          println("Conta "+conta+": Saldo antes do depósito: R$" +agencia.Consultar(conta)+". Foi realizado o depósito de: R$ "+quantia+".")
+
+        sender() ! Resposta(conta, quantia + agencia.Consultar(conta), agencia, op)
       }
     }
   }
@@ -52,22 +54,24 @@ object ProduzRelatorio {
 
     def receive = {
 
-      case Resposta(c,-1, agencia) => println("Valor indisponível para saque na conta "+c)
+      case Resposta(c,-1, agencia, op) => if (op == 1) println("Valor indisponível para saque na conta "+c)
 
-      case Resposta(c, q, agencia) => {
-        println("Conta " +c+ ": Estava com saldo de R$ " +agencia.Consultar(c)+ ". Passou a ter saldo de R$ "+q+".")
+      case Resposta(c, q, agencia, op) => {
+        if (op == 1)
+          println("Conta " +c+ ": Estava com saldo de R$ " +agencia.Consultar(c)+ ". Passou a ter saldo de R$ "+q+".")
+
         agencia.Colocar(c,q)
       }
-      case Deposito(c, q, agencia) => servidor ! Deposito(c, q, agencia)
+      case Deposito(c, q, agencia, op) => servidor ! Deposito(c, q, agencia, op)
 
-      case Saque(c, q, agencia) => servidor ! Saque(c, q, agencia)
+      case Saque(c, q, agencia, op) => servidor ! Saque(c, q, agencia, op)
 
-      case Transferencia(msg, qtd, rcp, agencia) => {
+      case Transferencia(msg, qtd, rcp, agencia, op) => {
         if(agencia.Consultar(msg) >= qtd){
-          servidor ! Saque(msg, qtd, agencia)
-          servidor ! Deposito(rcp, qtd, agencia)
+          servidor ! Saque(msg, qtd, agencia, op)
+          servidor ! Deposito(rcp, qtd, agencia, op)
         }
-        else{
+        else if (op == 1) {
           println("Saque não efetuado, pois o usuário não saldo suficiente.")
         }
       }
@@ -122,9 +126,18 @@ object ProduzRelatorio {
     gerador ! NovaCheia(3,40000,Agencia)
     gerador ! NovaCheia(4,2750,Agencia)
 
-    // Motidos de debug, para comparar com o final.
     println("Contas Iniciais: ")
     Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
+    println()
+
+    println("Digite o número da conta:") // para criar conta
+    val cc = scala.io.StdIn.readInt()
+
+    println("Deseja fazer um depósito inicial? (Caso não, digite 0)")
+    val valor = scala.io.StdIn.readDouble()
+
+    if (valor == 0) gerador ! NovaVazia(cc, Agencia)
+    else            gerador ! NovaCheia(cc, valor, Agencia)
 
     var x = -1
     repeatLoop {
@@ -133,30 +146,53 @@ object ProduzRelatorio {
       println("---------- 1 - Saque         --------------")
       println("---------- 2 - Transferencia --------------")
       println("---------- 3 - Deposito      --------------")
+      println("---------- 4 - Listar Contas Existentes ---")
+      println("---------- 5 - Extrato       --------------")
       println("---------- 0 - Sair          --------------")
       println("-------------------------------------------")
       println()
       x = scala.io.StdIn.readInt()
         x match {
         case 1 =>
-          cliente ! Saque(3, 10000, Agencia)
-          Thread.sleep(200)
-        case 2 =>
-          cliente ! Transferencia(2,500,1,Agencia)
+          println("Digite o valor para saque:")
+          cliente ! Saque(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do saque
           Thread.sleep(200)
 
-          cliente ! Transferencia(2,800,4,Agencia)
+          cliente ! Saque(3, 10000, Agencia, 0)
+          Thread.sleep(200)
+        case 2 =>
+          println("Digite o valor para transferencia: ")
+          val value = scala.io.StdIn.readDouble()
+
+          println("Digite o numero da conta destino: ")
+          cliente ! Transferencia(cc, value, scala.io.StdIn.readInt(), Agencia, 1) // 1 para imprimir o resultado da transferencia
+          Thread.sleep(200)
+
+          cliente ! Transferencia(2,500,1,Agencia, 0)
+          Thread.sleep(200)
+
+          cliente ! Transferencia(2,800,4,Agencia, 0)
           Thread.sleep(200)
         case 3 =>
-          cliente ! Deposito(2,700,Agencia)
+          println("Digite o valor para depósito: ")
+          cliente ! Deposito(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do deposito
           Thread.sleep(200)
+
+          cliente ! Deposito(2,700,Agencia, 0)
+          Thread.sleep(200)
+        case 4 =>
+          println("Existe as contas disponíveis: ")
+          Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta: " +a._1+" disponível para operações."))
+        case 5 =>
+          println("Não implementado..")
         case 0 =>
           x = -1
       }
     } until (x != -1)
 
-    // Motivos de Debug
-    println("Contas resultantes (Após as operações): ")
+    println("Contas resultantes (Após as operações):\n")
     Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
   }
+
+
 }
