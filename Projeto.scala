@@ -1,3 +1,15 @@
+//As modificações acumuladas:
+//Eu mudei o banco de dados de um Map para uma classe para poder sofisticar mais o projeto
+//Eu escrevi um exemplo de main para exemplificar o que o programa faz atualmente
+//Mudancas nos prints
+//Aprimoraçao do menu principal
+
+//O que seria legal ainda fazer:
+//Implementar o extrato
+//Criar mais opcoes de contas (cc, poupanca)
+//Aprimorar o armazenamento das contas (colocar nome, cpf, aniversario (poupanca))
+//Já temos funçoes de alta ordem??
+
 import akka.actor._
 import akka.actor.ActorSystem
 
@@ -130,69 +142,94 @@ object ProduzRelatorio {
     Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
     println()
 
-    println("Digite o número da conta:") // para criar conta
-    val cc = scala.io.StdIn.readInt()
+    var opcao1 = -1
+    var cc = 0
 
-    println("Deseja fazer um depósito inicial? (Caso não, digite 0)")
-    val valor = scala.io.StdIn.readDouble()
+      repeatLoop {
+        println()
+        println("-------------------------------------------")
+        println("---------- 1 - Criar Conta   --------------")
+        println("---------- 2 - Acessar Conta --------------")
+        println("---------- 0 - Sair          --------------")
+        println("-------------------------------------------")
+        println()
+        opcao1 = scala.io.StdIn.readInt()
 
-    if (valor == 0) gerador ! NovaVazia(cc, Agencia)
-    else            gerador ! NovaCheia(cc, valor, Agencia)
+        opcao1 match {
+          case 1 =>
+            println("Digite o número da conta:") // para criar conta
+            cc = scala.io.StdIn.readInt()
 
-    var x = -1
-    repeatLoop {
-      println()
-      println("-------------------------------------------")
-      println("---------- 1 - Saque         --------------")
-      println("---------- 2 - Transferencia --------------")
-      println("---------- 3 - Deposito      --------------")
-      println("---------- 4 - Listar Contas Existentes ---")
-      println("---------- 5 - Extrato       --------------")
-      println("---------- 0 - Sair          --------------")
-      println("-------------------------------------------")
-      println()
-      x = scala.io.StdIn.readInt()
-        x match {
-        case 1 =>
-          println("Digite o valor para saque:")
-          cliente ! Saque(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do saque
-          Thread.sleep(200)
+            println("Deseja fazer um depósito inicial? (Caso não, digite 0)")
+            val valor = scala.io.StdIn.readDouble()
 
-          cliente ! Saque(3, 10000, Agencia, 0)
-          Thread.sleep(200)
-        case 2 =>
-          println("Digite o valor para transferencia: ")
-          val value = scala.io.StdIn.readDouble()
+            if (valor == 0) gerador ! NovaVazia(cc, Agencia)
+            else            gerador ! NovaCheia(cc, valor, Agencia)
+          case 2 =>
+            println("Digite o número da conta: ") // para acessar a conta
+            cc = scala.io.StdIn.readInt() // precisa fazer a verificacao da conta (se ela já existe ou não)
+          case 0 =>
+            // Antes de sair do sistema, ele imprime todas as contas após as operacoes
+            println("Contas resultantes (Após as operações):\n")
+            Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
+            System.exit(0)
+        }
 
-          println("Digite o numero da conta destino: ")
-          cliente ! Transferencia(cc, value, scala.io.StdIn.readInt(), Agencia, 1) // 1 para imprimir o resultado da transferencia
-          Thread.sleep(200)
+        var opcao2 = -1
+        
+        repeatLoop {
+          println()
+          println("-------------------------------------------")
+          println("---------- 1 - Saque         --------------")
+          println("---------- 2 - Transferencia --------------")
+          println("---------- 3 - Deposito      --------------")
+          println("---------- 4 - Listar Contas Existentes ---")
+          println("---------- 5 - Extrato       --------------")
+          println("---------- 0 - Sair da Conta --------------")
+          println("-------------------------------------------")
+          println()
+          opcao2 = scala.io.StdIn.readInt()
+          opcao2 match {
+            // Deixei as contas que foram criadas de testes e suas operaçes para mostra a concorrencia
+            // enquanto o cliente faz a operação, ocorre simultaneamente operaçes em outras contas
+            case 1 =>
+              println("Digite o valor para saque:")
+              cliente ! Saque(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do saque
+              Thread.sleep(200)
 
-          cliente ! Transferencia(2,500,1,Agencia, 0)
-          Thread.sleep(200)
+              cliente ! Saque(3, 10000, Agencia, 0)
+              Thread.sleep(200)
+            case 2 =>
+              println("Digite o valor para transferencia: ")
+              val value = scala.io.StdIn.readDouble()
 
-          cliente ! Transferencia(2,800,4,Agencia, 0)
-          Thread.sleep(200)
-        case 3 =>
-          println("Digite o valor para depósito: ")
-          cliente ! Deposito(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do deposito
-          Thread.sleep(200)
+              println("Digite o numero da conta destino: ")
+              cliente ! Transferencia(cc, value, scala.io.StdIn.readInt(), Agencia, 1) // 1 para imprimir o resultado da transferencia
+              Thread.sleep(200)
 
-          cliente ! Deposito(2,700,Agencia, 0)
-          Thread.sleep(200)
-        case 4 =>
-          println("Existe as contas disponíveis: ")
-          Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta: " +a._1+" disponível para operações."))
-        case 5 =>
-          println("Não implementado..")
-        case 0 =>
-          x = -1
-      }
-    } until (x != -1)
+              cliente ! Transferencia(2, 500, 1, Agencia, 0)
+              Thread.sleep(200)
 
-    println("Contas resultantes (Após as operações):\n")
-    Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
+              cliente ! Transferencia(2, 800, 4, Agencia, 0)
+              Thread.sleep(200)
+            case 3 =>
+              println("Digite o valor para depósito: ")
+              cliente ! Deposito(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do deposito
+              Thread.sleep(200)
+
+              cliente ! Deposito(2, 700, Agencia, 0)
+              Thread.sleep(200)
+            case 4 =>
+              println("Existe as contas disponíveis: ")
+              Await.result(Future {
+                Agencia
+              }, Duration.Inf).Banco.foreach((a) => println("Conta: " + a._1 + " disponível para operações."))
+            case 5 =>
+              println("Não implementado..")
+            case 0 =>
+              opcao2 = 0
+          }
+        } until (opcao2 != 0)
+      } until (opcao1 != 0)
   }
-
-
 }
