@@ -1,3 +1,12 @@
+/*
+  Projeto realizado por (08/2017): 
+  Guilherme Dias Belarmino
+  Gustavo Zanfelice Dib
+  Murilo Bolzan Dionisio
+
+  Paradigmas de Programação - UFABC. Profa.: Debora Medeiros
+*/
+
 import akka.actor._
 import akka.actor.ActorSystem
 import scala.collection.mutable
@@ -200,6 +209,9 @@ object ProduzRelatorio {
     case None    => false
   }
 
+  /*
+  Foi implementado o menu de outra maneira para retirar as vars criadas
+
   // Criado para o do-while
   def repeatLoop(body: => Unit) = new Until(body)
 
@@ -210,6 +222,7 @@ object ProduzRelatorio {
       if (cond) until(cond)
     }
   }
+  */
 
   def main(args: Array[String]): Unit = {
     // declaracao dos atores
@@ -229,114 +242,138 @@ object ProduzRelatorio {
     Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
     println()
 
-    // var criada para condicao do loop do menu
-    var opcao1 = -1
+    MenuPrincipal // chamada para o menu principal
 
-    repeatLoop {
-      println()
-      println("-------------------------------------------")
-      println("---------- 1 - Criar Conta   --------------")
-      println("---------- 2 - Acessar Conta --------------")
-      println("---------- 3 - Listar Contas Existentes ---")
-      println("---------- 0 - Sair          --------------")
-      println("-------------------------------------------")
-      println()
-      opcao1 = scala.io.StdIn.readInt()
+    def MenuPrincipal {
+      Menu1
 
-      opcao1 match {
-        case 1 =>
-          println("Digite o número da conta:") // para criar conta
+      def Menu1: Unit = {
+        println()
+        println("-------------------------------------------")
+        println("---------- 1 - Criar Conta   --------------")
+        println("---------- 2 - Acessar Conta --------------")
+        println("---------- 3 - Listar Contas Existentes ---")
+        println("---------- 0 - Sair          --------------")
+        println("-------------------------------------------")
+        println()
+        val opcao1 = scala.io.StdIn.readInt()
+
+        opcao1 match {
+          case 1 =>
+            println("Digite o número da conta:") // para criar conta
           val cc = scala.io.StdIn.readInt()
 
-          if (!verifica(Agencia.Banco.get(cc))) { // verificar se o número de conta já existe
+            if (!verifica(Agencia.Banco.get(cc))) { // verificar se o número de conta já existe
 
-            println("Deseja fazer um depósito inicial? (Caso não, digite 0)")
-            val valor = scala.io.StdIn.readDouble()
+              println("Deseja fazer um depósito inicial? (Caso não, digite 0)")
+              val valor = scala.io.StdIn.readDouble()
 
-            println("Insira seu nome: ")
-            val nome = scala.io.StdIn.readLine
+              println("Insira seu nome: ")
+              val nome = scala.io.StdIn.readLine
 
-            println("Insira seu CPF: ")
-            val cpf = scala.io.StdIn.readLine
+              println("Insira seu CPF: ")
+              val cpf = scala.io.StdIn.readLine
 
-            println("Voce deseja ser um usuario premium? (Digite 2 para sim e 1 para nao)")
-            val premium = scala.io.StdIn.readInt()
+              println("Voce deseja ser um usuario premium? (Digite 2 para sim e 1 para nao)")
+              val premium = scala.io.StdIn.readInt()
 
+              if (valor == 0) gerador ! NovaVazia(cc, Agencia, nome, cpf, premium) // criar conta vazia
+              else gerador ! NovaCheia(cc, valor, Agencia, nome, cpf, premium) // criar conta com saldo valor
+              Logar(cc) // acessar o menu de operações do cliente
+            }
+            else {
+              println("Conta já existe.")
+              Menu1
+            }
 
-            if (valor == 0) gerador ! NovaVazia(cc, Agencia, nome, cpf, premium) // criar conta vazia
-            else gerador ! NovaCheia(cc, valor, Agencia, nome, cpf, premium) // criar conta com saldo valor
-            Logar(cc) // acessar o menu de operações do cliente
+          case 2 =>
+            println("Digite o número da conta: ") // para acessar a conta
+          val cc = scala.io.StdIn.readInt()
+            if (verifica(Agencia.Banco.get(cc))) // verificar se a conta já existe
+              Logar(cc)
+            else {
+              println("Conta não existe.")
+              Menu1
+            }
+          case 3 =>
+            println("Existe as contas disponíveis: ") // Lista as contas (apenas os números de conta) cadastrados no sistema
+            Await.result(Future {
+              Agencia
+            }, Duration.Inf).Banco.foreach((a) => println("Conta: " + a._1 + " disponível para operações."))
+            Menu1
+          case 0 =>
+            // Antes de sair do sistema, ele imprime todas as contas (número da conta e saldo) após as operacoes
+            println("Contas resultantes (Após as operações):\n")
+            Await.result(Future {
+              Agencia
+            }, Duration.Inf).Banco.foreach((a) => println("Conta numero: " + a._1 + " tem saldo de: " + a._2 + " reais."))
+            System.exit(0)
+        }
+
+        // menu com as operações
+        def Logar(cc: Int): Unit = {
+          Menu2
+
+          def Menu2: Unit = {
+            println()
+            println("-------------------------------------------")
+            println("---------- 1 - Saque         --------------")
+            println("---------- 2 - Transferencia --------------")
+            println("---------- 3 - Deposito      --------------")
+            println("---------- 4 - Extrato       --------------")
+            println("---------- 0 - Sair da Conta --------------")
+            println("-------------------------------------------")
+            println()
+            val opcao2 = scala.io.StdIn.readInt()
+            opcao2 match {
+              // As contas que foram criadas para testes realizam suas operações (não impressas na tela) para mostrar a concorrencia.
+              // Enquanto o cliente faz sua operação, ocorrem paralelamente outras operaçes em outras contas.
+              case 1 =>
+                println("Digite o valor para saque:")
+                cliente ! Saque(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do saque
+                Thread.sleep(200)
+
+                cliente ! Saque(3, 10000, Agencia, 0) // Saque em uma das contas testes
+                Thread.sleep(200)
+
+                Menu2
+              case 2 =>
+                println("Digite o valor para transferencia: ")
+                val value = scala.io.StdIn.readDouble()
+
+                println("Digite o numero da conta destino: ")
+                cliente ! Transferencia(cc, value, scala.io.StdIn.readInt(), Agencia, 1) // 1 para imprimir o resultado da transferencia
+                Thread.sleep(200)
+
+                cliente ! Transferencia(2, 500, 1, Agencia, 0) // Transferencia em uma das contas testes
+                Thread.sleep(200)
+
+                cliente ! Transferencia(2, 800, 4, Agencia, 0) // Transferencia em uma das contas testes
+                Thread.sleep(200)
+
+                Menu2
+              case 3 =>
+                println("Digite o valor para depósito: ")
+                cliente ! Deposito(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do deposito
+                Thread.sleep(200)
+
+                cliente ! Deposito(2, 700, Agencia, 0) // Deposito em uma das contas testes
+                Thread.sleep(200)
+
+                Menu2
+              case 4 =>
+                Agencia.Extrato(cc) // consulta extrato
+                Menu2
+              case 0 =>
+                println("Logged out")
+                Menu1
+              case _ =>
+                println("Caso invalido")
+                Menu2
+            }
           }
-          else
-            println("Conta já existe.")
-        case 2 =>
-          println("Digite o número da conta: ") // para acessar a conta
-        val cc = scala.io.StdIn.readInt()
-          if (verifica(Agencia.Banco.get(cc))) // verificar se a conta já existe
-            Logar(cc)
-          else
-            println("Conta não existe.")
-        case 3 =>
-          println("Existe as contas disponíveis: ") // Lista as contas (apenas os números de conta) cadastrados no sistema
-          Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta: " + a._1 + " disponível para operações."))
-        case 0 =>
-          // Antes de sair do sistema, ele imprime todas as contas (número da conta e saldo) após as operacoes
-          println("Contas resultantes (Após as operações):\n")
-          Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
-          System.exit(0)
+        }
       }
-        
-      // menu com as operações
-      def Logar(cc: Int): Unit = {
-        var opcao2 = -1 // var criada para condicao do loop
-        repeatLoop {
-          println()
-          println("-------------------------------------------")
-          println("---------- 1 - Saque         --------------")
-          println("---------- 2 - Transferencia --------------")
-          println("---------- 3 - Deposito      --------------")
-          println("---------- 4 - Extrato       --------------")
-          println("---------- 0 - Sair da Conta --------------")
-          println("-------------------------------------------")
-          println()
-          opcao2 = scala.io.StdIn.readInt()
-          opcao2 match {
-            // As contas que foram criadas para testes realizam suas operações (não impressas na tela) para mostrar a concorrencia.
-            // Enquanto o cliente faz sua operação, ocorrem paralelamente outras operaçes em outras contas.
-            case 1 =>
-              println("Digite o valor para saque:")
-              cliente ! Saque(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do saque
-              Thread.sleep(200)
-
-              cliente ! Saque(3, 10000, Agencia, 0) // Saque em uma das contas testes
-              Thread.sleep(200)
-            case 2 =>
-              println("Digite o valor para transferencia: ")
-              val value = scala.io.StdIn.readDouble()
-
-              println("Digite o numero da conta destino: ")
-              cliente ! Transferencia(cc, value, scala.io.StdIn.readInt(), Agencia, 1) // 1 para imprimir o resultado da transferencia
-              Thread.sleep(200)
-
-              cliente ! Transferencia(2, 500, 1, Agencia, 0) // Transferencia em uma das contas testes
-              Thread.sleep(200)
-
-              cliente ! Transferencia(2, 800, 4, Agencia, 0) // Transferencia em uma das contas testes
-              Thread.sleep(200)
-            case 3 =>
-              println("Digite o valor para depósito: ")
-              cliente ! Deposito(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do deposito
-              Thread.sleep(200)
-
-              cliente ! Deposito(2, 700, Agencia, 0) // Deposito em uma das contas testes
-              Thread.sleep(200)
-            case 4 =>
-              Agencia.Extrato(cc) // consulta extrato 
-            case 0 => println("Logged out")
-            case _ => println("Caso invalido")
-          }
-        } until (opcao2 != 0)
-      }
-    } until (opcao1 != 0)
+    }
   }
 }
