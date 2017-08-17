@@ -65,6 +65,7 @@ object ProduzRelatorio {
 
       case Saque(conta, quantia, agencia, op) => {
         if (op == 1) // op == 1 -> imprimir o resultado do saque. op == 0 -> Não imprimir, saque sendo realizado em background
+          println("Conta "+conta+": Saldo antes do saque: R$ "+agencia.Consultar(conta)+". Foi realizado o saque de: R$ "+quantia+".")
 
         if(agencia.Consultar(conta) > quantia)  sender() ! Resposta(conta, agencia.Consultar(conta) - quantia, agencia, op)
         else sender() ! Resposta(conta, -1, agencia, op)
@@ -72,6 +73,7 @@ object ProduzRelatorio {
 
       case Deposito(conta, quantia, agencia, op) => {
         if (op == 1)
+          println("Conta "+conta+": Saldo antes do depósito: R$" +agencia.Consultar(conta)+". Foi realizado o depósito de: R$ "+quantia+".")
          
         sender() ! Resposta(conta, quantia + agencia.Consultar(conta), agencia, op)
       }
