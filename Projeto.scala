@@ -12,7 +12,7 @@ import scala.concurrent.duration.Duration
 
 object ProduzRelatorio {
   /*Parametros:
-   conta -> numero da conta;                                      quantia -> valor a ser sacado;
+   conta -> numero da conta;                                      quantia -> valor a ser utilizado na operacao;
    Agencia -> Onde está armazenado as informações da conta;       op -> opcao para impressao na tela;
    mensageiro -> conta origem;                                    receptor -> conta destino;
    montante -> valor total do saldo;
@@ -35,12 +35,12 @@ object ProduzRelatorio {
 
   // Objeto que poussui os dados do cliente
   class DadosCli(val nome: String, val cpf: String) {
-    val tipo = 1 // Tipo 1 -> conta normal; Tipo 2 -> conta VIP
+    val tipo = 1 // Tipo 1 -> conta normal;
   }
 
   // trait que modifica o comportamento da classe DadosCli para que seja VIP
   trait VIP extends DadosCli {
-    override val tipo = 2
+    override val tipo = 2 // Tipo 2 -> conta VIP
   }
 
   class BancoDeDados {
@@ -61,8 +61,8 @@ object ProduzRelatorio {
 
     /*
     ContaInteiros, ContaDouble e Completa:
-    Métodos criados para alinhar a quantidade de "-" nos extratos.
-    O método completa é uma função de alta ordem pois recebe uma função f como parâmetro. Possui também
+    Métodos criados para alinhar a quantidade de "-" no método de impressão de extratos.
+    O método Completa é uma função de alta ordem pois recebe uma função f como parâmetro. Possui também
     o polimorfismo paramétrico, visto que será usada com diferentes tipos de dados (int, double, string)
      */
 
@@ -77,7 +77,6 @@ object ProduzRelatorio {
       val int = ContaInteiros(x.toInt,ret)
       int+1+((x.toString).replace(".",",").split(",").toList)(1).length
     }
-
 
     def Completa[A](ant:Int, x:A,f: A=>Int): String={
       val a = ((42-ant)-f(x))
@@ -115,13 +114,13 @@ object ProduzRelatorio {
   class Adm extends Actor {
 
     def receive = {
-      // tarefa de saque.
+      // tarefa de saque
       case Saque(conta, quantia, agencia, op) => {
         if(agencia.Consultar(conta) >= quantia)  sender() ! Resposta(conta, agencia.Consultar(conta) - quantia, agencia, op) // Tem saldo para saque
         else sender() ! Resposta(conta, -1, agencia, op) // É passado o "-1" na resposta pois não tem saldo suficiente para saque
       }
 
-      // tarefa de saque
+      // tarefa de deposito
       case Deposito(conta, quantia, agencia, op) => {
         sender() ! Resposta(conta, quantia + agencia.Consultar(conta), agencia, op)
       }
@@ -173,7 +172,7 @@ object ProduzRelatorio {
         tipo match {
           case 1 => agencia.NovoUser(a, nome, cpf) // Usuário normal
           case 2 => agencia.NovoUserPremium(a, nome, cpf) // Usuário premium
-          case _ => { // Caso passem um tipo não especificado, é criado uma conta do tipo normal
+          case _ => { // Caso seja passado um tipo não especificado, é criado uma conta do tipo normal
             println("Tipo desconhecido, criado usuario padrao")
             agencia.NovoUser(a, nome, cpf)
           }
@@ -185,7 +184,7 @@ object ProduzRelatorio {
         tipo match {
           case 1 => agencia.NovoUser(a, nome, cpf) // usuário normal
           case 2 => agencia.NovoUserPremium(a, nome, cpf) // usuario premium
-          case _ => { // Caso passem um tipo não especificado, é criado uma conta do tipo normal
+          case _ => { // Caso seja passado um tipo não especificado, é criado uma conta do tipo normal
             println("Tipo desconhecido, criado usuario padrao")
             agencia.NovoUser(a, nome, cpf)
           }
@@ -226,7 +225,7 @@ object ProduzRelatorio {
     gerador ! NovaCheia(3, 40000, Agencia, "Charles", "1765489012", 2)
     gerador ! NovaCheia(4, 2750, Agencia, "Bianca", "1429807765", 1)
 
-    println("Contas Iniciais: ") // Imprimi os estados (número de conta e saldo) iniciais das contas criadas
+    println("Contas Iniciais: ") // Imprime os estados (número de conta e saldo) iniciais das contas criadas
     Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
     println()
 
@@ -247,7 +246,7 @@ object ProduzRelatorio {
       opcao1 match {
         case 1 =>
           println("Digite o número da conta:") // para criar conta
-        val cc = scala.io.StdIn.readInt()
+          val cc = scala.io.StdIn.readInt()
 
           if (!verifica(Agencia.Banco.get(cc))) { // verificar se o número de conta já existe
 
@@ -265,7 +264,7 @@ object ProduzRelatorio {
 
 
             if (valor == 0) gerador ! NovaVazia(cc, Agencia, nome, cpf, premium) // criar conta vazia
-            else gerador ! NovaCheia(cc, valor, Agencia, nome, cpf, premium) // criar conta com saldo "valor"
+            else gerador ! NovaCheia(cc, valor, Agencia, nome, cpf, premium) // criar conta com saldo valor
             Logar(cc) // acessar o menu de operações do cliente
           }
           else
@@ -302,8 +301,8 @@ object ProduzRelatorio {
           println()
           opcao2 = scala.io.StdIn.readInt()
           opcao2 match {
-            // As contas que foram criadas de testes realizam suas operaçes (não impressas na tela) para mostrar a concorrencia.
-            // Enquanto o cliente faz sua operação, ocorre paralelamente outras operaçes em outras contas.
+            // As contas que foram criadas para testes realizam suas operações (não impressas na tela) para mostrar a concorrencia.
+            // Enquanto o cliente faz sua operação, ocorrem paralelamente outras operaçes em outras contas.
             case 1 =>
               println("Digite o valor para saque:")
               cliente ! Saque(cc, scala.io.StdIn.readDouble(), Agencia, 1) // 1 para imprimir o resultado do saque
