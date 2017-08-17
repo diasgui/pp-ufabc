@@ -85,17 +85,11 @@ object ProduzRelatorio {
     def receive = {
 
       case Saque(conta, quantia, agencia, op) => {
-        if (op == 1) // op == 1 -> imprimir o resultado do saque. op == 0 -> Não imprimir, saque sendo realizado em background
-          println("Conta "+conta+": Saldo antes do saque: R$ "+agencia.Consultar(conta)+". Foi realizado o saque de: R$ "+quantia+".")
-
-        if(agencia.Consultar(conta) > quantia)  sender() ! Resposta(conta, agencia.Consultar(conta) - quantia, agencia, op)
+        if(agencia.Consultar(conta) >= quantia)  sender() ! Resposta(conta, agencia.Consultar(conta) - quantia, agencia, op)
         else sender() ! Resposta(conta, -1, agencia, op)
       }
 
       case Deposito(conta, quantia, agencia, op) => {
-        if (op == 1)
-          println("Conta "+conta+": Saldo antes do depósito: R$" +agencia.Consultar(conta)+". Foi realizado o depósito de: R$ "+quantia+".")
-
         sender() ! Resposta(conta, quantia + agencia.Consultar(conta), agencia, op)
       }
     }
@@ -123,7 +117,7 @@ object ProduzRelatorio {
           servidor ! Deposito(rcp, qtd, agencia, op)
         }
         else if (op == 1) {
-          println("Saque não efetuado, pois o usuário não saldo suficiente.")
+          println("Transferência não efetuada, pois o usuário não tem saldo suficiente.")
         }
       }
       case Extrato(c, agencia) => agencia.Extrato(c)
@@ -135,15 +129,14 @@ object ProduzRelatorio {
     def receive = {
       case NovaVazia(a, agencia, nome, cpf, tipo) =>{
         agencia.Colocar(a)
-        tipo match{
+        tipo match {
           case 1 => agencia.NovoUser(a, nome, cpf)
           case 2 => agencia.NovoUserPremium(a, nome, cpf)
-          case _ =>{
+          case _ => {
             println("Tipo desconhecido, criado usuario padrao")
             agencia.NovoUser(a, nome, cpf)
           }
         }
-
       }
 
       case NovaCheia(a, qtd, agencia, nome, cpf, tipo) =>{
@@ -185,7 +178,7 @@ object ProduzRelatorio {
     //Por motivos de teste, vamos adicionar alguns usuários
     gerador ! NovaVazia(1, Agencia, "Carlos", "4502308971", 1)
     gerador ! NovaCheia(2,1000,Agencia, "Monica", "6547328218", 2)
-    gerador ! NovaCheia(3,40000,Agencia, "Charles", "1765489012", 3)
+    gerador ! NovaCheia(3,40000,Agencia, "Charles", "1765489012", 2)
     gerador ! NovaCheia(4,2750,Agencia, "Bianca", "1429807765", 1)
 
     println("Contas Iniciais: ")
