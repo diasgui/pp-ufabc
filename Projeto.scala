@@ -13,7 +13,7 @@ import scala.concurrent.duration.Duration
 object ProduzRelatorio {
   /*Parametros:
    conta -> numero da conta;                                      quantia -> valor a ser sacado;
-   Agencia -> Onde está armazenado as informações do cliente;      op -> opcao para impressao na tela do saque;
+   Agencia -> Onde está armazenado as informações do cliente;     op -> opcao para impressao na tela do saque;
    mensageiro -> conta origem;                                    receptor -> conta destino;
    montante -> valor total do saldo;
   */
