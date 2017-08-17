@@ -1,5 +1,5 @@
 /*
-  Projeto realizado por (08/2017): 
+  Projeto realizado por (08/2017):
   Guilherme Dias Belarmino
   Gustavo Zanfelice Dib
   Murilo Bolzan Dionisio
@@ -90,7 +90,7 @@ object ProduzRelatorio {
     def Completa[A](ant:Int, x:A,f: A=>Int): String={
       val a = ((42-ant)-f(x))
       @annotation.tailrec
-      def go(cont:Int,ret:String): String={
+      def go(cont:Int,ret:String): String = {
         if(cont==a) ret
         else go(cont+1,ret+"-")
       }
@@ -342,8 +342,13 @@ object ProduzRelatorio {
                 val value = scala.io.StdIn.readDouble()
 
                 println("Digite o numero da conta destino: ")
-                cliente ! Transferencia(cc, value, scala.io.StdIn.readInt(), Agencia, 1) // 1 para imprimir o resultado da transferencia
-                Thread.sleep(200)
+                val cd = scala.io.StdIn.readInt()
+                if (verifica(Agencia.Banco.get(cd))) { // verifica se a conta destino existe
+                  cliente ! Transferencia(cc, value, cd, Agencia, 1) // 1 para imprimir o resultado da transferencia
+                  Thread.sleep(200)
+                }
+                else
+                  println("Conta destino não existe.")
 
                 cliente ! Transferencia(2, 500, 1, Agencia, 0) // Transferencia em uma das contas testes
                 Thread.sleep(200)
