@@ -1,14 +1,3 @@
-//As modificações acumuladas:
-//Eu mudei o banco de dados de um Map para uma classe para poder sofisticar mais o projeto
-//Eu escrevi um exemplo de main para exemplificar o que o programa faz atualmente
-//Mudancas nos prints
-//Aprimoraçao do menu principal
-
-//O que seria legal ainda fazer:
-//Implementar o extrato
-//Criar mais opcoes de contas (cc, poupanca)
-//Aprimorar o armazenamento das contas (colocar nome, cpf, aniversario (poupanca))
-//Já temos funçoes de alta ordem??
 
 import akka.actor._
 import akka.actor.ActorSystem
@@ -29,15 +18,47 @@ object ProduzRelatorio {
   case class Transferencia(mensageiro: Int, quantia: Double, receptor: Int, Agencia: BancoDeDados, op: Int)
   case class Extrato(conta: Int, Agencia: BancoDeDados, tipo: Int) // coloquei esse terceiro parametro para CC ou Poupanca
   case class Resposta(conta: Int, montante: Double, Agencia: BancoDeDados, op: Int)
-  case class NovaVazia(conta: Int, Agencia: BancoDeDados)
-  case class NovaCheia(conta: Int, quantia: Double, Agencia: BancoDeDados)
+  case class NovaVazia(conta: Int, Agencia: BancoDeDados, nome:String, cpf:String)
+  case class NovaCheia(conta: Int, quantia: Double, Agencia: BancoDeDados, nome:String, cpf:String)
 
+  class DadosCli(val nome: String, val cpf: String){
+  }
+  
+  trait Fancy extends BancoDeDados{
+    override def Extrato(c:Int,tipo:Int)={
+      println("-----  Esta aqui o seu extrato querido cliente: -----")
+      super.Extrato(c,tipo)
+    }
+  }
+ 
+  
   class BancoDeDados {
     var Banco: Map[Int, Double] = Map()
+    var DadosBanco: Map[Int, DadosCli] = Map()
+    def NovoUser(c:Int, nome:String, cpf: String): Unit = synchronized{ DadosBanco = DadosBanco+(c -> new DadosCli(nome,cpf)) }
     def Consultar(x:Int) = synchronized{  Banco(x)  }
     def Colocar(conta: Int, quantia: Double) = synchronized{  Banco = Banco + (conta -> quantia)  }
     def Colocar(conta: Int) = synchronized{  Banco = Banco + (conta -> 0)  }
     def Remover(conta: Int) = synchronized{  Banco = Banco - conta }
+    def Extrato(c:Int, tipo:Int): Unit={
+      tipo match{
+        case 1 =>{
+          println("--------- Extrato conta normal "+c+" ---------")
+          println("Nome: "+ DadosBanco(c).nome)
+          println("CPF: " + DadosBanco(c).cpf)
+          println("Saldo: "+ Consultar(c))
+          println("------------------------------------------")
+        }
+        case 2 =>{
+          println("-------- Extrato conta premier "+c+" --------")
+          println("Nome: "+ DadosBanco(c).nome)
+          println("CPF: "+ DadosBanco(c).cpf)
+          println("Saldo: "+ Consultar(c))
+          println("Aniversario: ")
+          println("-------------------------------------------")
+        }
+      }
+    }
   }
 
   //Esta classe funciona como um adm, ela recebe uma tarefa e responde o montante que ficará na conta que sofreu a alteração
@@ -87,32 +108,22 @@ object ProduzRelatorio {
           println("Saque não efetuado, pois o usuário não saldo suficiente.")
         }
       }
-
-      case Extrato(c, agencia, 1) => { // 1 para conta corrente (Se adicionarmos parametros como Nome, cpf, etc, podemos colocar aqui tbm
-        println("--------- Extrato da conta "+c+" ---------")
-        println("Nome: ")
-        println("CPF: ")
-        println("Saldo: "+ agencia.Consultar(c))
-        println("------------------------------------------")
-      }
-
-      case Extrato(c, agencia, 2) => { // 2 para poupanca
-        println("-------- Extrato da poupanca "+c+" --------")
-        println("Nome: ")
-        println("CPF: ")
-        println("Saldo: "+ agencia.Consultar(c))
-        println("Aniversario: ")
-        println("-------------------------------------------")
-      }
+      case Extrato(c, agencia, t) => agencia.Extrato(c, t)
     }
   }
 
   class Gerador extends Actor {
 
     def receive = {
-      case NovaVazia(a, agencia) => agencia.Colocar(a)
+      case NovaVazia(a, agencia, nome, cpf) =>{
+        agencia.Colocar(a)
+        agencia.NovoUser(a, nome, cpf)
+      }
 
-      case NovaCheia(a, qtd, agencia) => agencia.Colocar(a, qtd)
+      case NovaCheia(a, qtd, agencia, nome, cpf) =>{
+        agencia.Colocar(a, qtd)
+        agencia.NovoUser(a, nome, cpf)
+      }
     }
   }
 
@@ -133,10 +144,10 @@ object ProduzRelatorio {
     val Agencia = new BancoDeDados;
 
     //Por motivos de teste, vamos adicionar alguns usuários
-    gerador ! NovaVazia(1, Agencia)
-    gerador ! NovaCheia(2,1000,Agencia)
-    gerador ! NovaCheia(3,40000,Agencia)
-    gerador ! NovaCheia(4,2750,Agencia)
+    gerador ! NovaVazia(1, Agencia, "Carlos", "4502308971")
+    gerador ! NovaCheia(2,1000,Agencia, "Monica", "6547328218")
+    gerador ! NovaCheia(3,40000,Agencia, "Charles", "1765489012")
+    gerador ! NovaCheia(4,2750,Agencia, "Bianca", "1429807765")
 
     println("Contas Iniciais: ")
     Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
@@ -162,9 +173,15 @@ object ProduzRelatorio {
 
             println("Deseja fazer um depósito inicial? (Caso não, digite 0)")
             val valor = scala.io.StdIn.readDouble()
+            
+            println("Insira seu nome: ")
+            val nome = scala.io.StdIn.readLine
+            
+            println("Insira seu cpf: ")
+            val cpf = scala.io.StdIn.readLine
 
-            if (valor == 0) gerador ! NovaVazia(cc, Agencia)
-            else            gerador ! NovaCheia(cc, valor, Agencia)
+            if (valor == 0) gerador ! NovaVazia(cc, Agencia, nome, cpf)
+            else            gerador ! NovaCheia(cc, valor, Agencia, nome, cpf)
           case 2 =>
             println("Digite o número da conta: ") // para acessar a conta
             cc = scala.io.StdIn.readInt() // precisa fazer a verificacao da conta (se ela já existe ou não)
@@ -176,7 +193,6 @@ object ProduzRelatorio {
         }
 
         var opcao2 = -1
-        
         repeatLoop {
           println()
           println("-------------------------------------------")
@@ -226,8 +242,8 @@ object ProduzRelatorio {
               }, Duration.Inf).Banco.foreach((a) => println("Conta: " + a._1 + " disponível para operações."))
             case 5 =>
               println("Não implementado..")
-            case 0 =>
-              opcao2 = 0
+            //case 0 =>
+              //opcao2 = 0
           }
         } until (opcao2 != 0)
       } until (opcao1 != 0)
