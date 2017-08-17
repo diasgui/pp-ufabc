@@ -16,19 +16,17 @@ object ProduzRelatorio {
   case class Saque(conta: Int, quantia: Double, Agencia: BancoDeDados, op: Int) // Coloquei esse op para ser operação de imprimir ou nao
   case class Deposito(conta: Int, quantia: Double, Agencia: BancoDeDados, op: Int)
   case class Transferencia(mensageiro: Int, quantia: Double, receptor: Int, Agencia: BancoDeDados, op: Int)
-  case class Extrato(conta: Int, Agencia: BancoDeDados, tipo: Int) // coloquei esse terceiro parametro para CC ou Poupanca
+  case class Extrato(conta: Int, Agencia: BancoDeDados) // coloquei esse terceiro parametro para CC ou Poupanca
   case class Resposta(conta: Int, montante: Double, Agencia: BancoDeDados, op: Int)
-  case class NovaVazia(conta: Int, Agencia: BancoDeDados, nome:String, cpf:String)
-  case class NovaCheia(conta: Int, quantia: Double, Agencia: BancoDeDados, nome:String, cpf:String)
+  case class NovaVazia(conta: Int, Agencia: BancoDeDados, nome:String, cpf:String, tipo:Int)
+  case class NovaCheia(conta: Int, quantia: Double, Agencia: BancoDeDados, nome:String, cpf:String, tipo:Int)
 
   class DadosCli(val nome: String, val cpf: String){
+    val tipo=1;
   }
   
-  trait Fancy extends BancoDeDados{
-    override def Extrato(c:Int,tipo:Int)={
-      println("-----  Esta aqui o seu extrato querido cliente: -----")
-      super.Extrato(c,tipo)
-    }
+  trait VIP extends DadosCli{
+    override val tipo=2;
   }
  
   
@@ -36,16 +34,16 @@ object ProduzRelatorio {
     var Banco: Map[Int, Double] = Map()
     var DadosBanco: Map[Int, DadosCli] = Map()
     def NovoUser(c:Int, nome:String, cpf: String): Unit = synchronized{ DadosBanco = DadosBanco+(c -> new DadosCli(nome,cpf)) }
+    def NovoUserPremium(c:Int, nome:String, cpf: String): Unit = synchronized{ DadosBanco = DadosBanco+(c -> new DadosCli(nome,cpf) with VIP) }
     def Consultar(x:Int) = synchronized{  Banco(x)  }
     def Colocar(conta: Int, quantia: Double) = synchronized{  Banco = Banco + (conta -> quantia)  }
     def Colocar(conta: Int) = synchronized{  Banco = Banco + (conta -> 0)  }
     def Remover(conta: Int) = synchronized{  Banco = Banco - conta }
-    def Extrato(c:Int, tipo:Int): Unit={
+    def Extrato(c:Int): Unit={
+      val tipo = DadosBanco(c).tipo
       tipo match{
         case 1 =>{
           println("--------- Extrato conta normal "+c+" ---------")
-          println("Nome: "+ DadosBanco(c).nome)
-          println("CPF: " + DadosBanco(c).cpf)
           println("Saldo: "+ Consultar(c))
           println("------------------------------------------")
         }
@@ -54,7 +52,6 @@ object ProduzRelatorio {
           println("Nome: "+ DadosBanco(c).nome)
           println("CPF: "+ DadosBanco(c).cpf)
           println("Saldo: "+ Consultar(c))
-          println("Aniversario: ")
           println("-------------------------------------------")
         }
       }
@@ -108,21 +105,36 @@ object ProduzRelatorio {
           println("Saque não efetuado, pois o usuário não saldo suficiente.")
         }
       }
-      case Extrato(c, agencia, t) => agencia.Extrato(c, t)
+      case Extrato(c, agencia) => agencia.Extrato(c)
     }
   }
 
   class Gerador extends Actor {
 
     def receive = {
-      case NovaVazia(a, agencia, nome, cpf) =>{
+      case NovaVazia(a, agencia, nome, cpf, tipo) =>{
         agencia.Colocar(a)
-        agencia.NovoUser(a, nome, cpf)
+        tipo match{
+          case 1 => agencia.NovoUser(a, nome, cpf)
+          case 2 => agencia.NovoUserPremium(a, nome, cpf)
+          case _ =>{
+            println("Tipo desconhecido, criado usuario padrao")
+            agencia.NovoUser(a, nome, cpf)
+          }
+        }
+        
       }
 
-      case NovaCheia(a, qtd, agencia, nome, cpf) =>{
+      case NovaCheia(a, qtd, agencia, nome, cpf, tipo) =>{
         agencia.Colocar(a, qtd)
-        agencia.NovoUser(a, nome, cpf)
+        tipo match{
+          case 1 => agencia.NovoUser(a, nome, cpf)
+          case 2 => agencia.NovoUserPremium(a, nome, cpf)
+          case _ =>{
+            println("Tipo desconhecido, criado usuario padrao")
+            agencia.NovoUser(a, nome, cpf)
+          }
+        }
       }
     }
   }
@@ -144,10 +156,10 @@ object ProduzRelatorio {
     val Agencia = new BancoDeDados;
 
     //Por motivos de teste, vamos adicionar alguns usuários
-    gerador ! NovaVazia(1, Agencia, "Carlos", "4502308971")
-    gerador ! NovaCheia(2,1000,Agencia, "Monica", "6547328218")
-    gerador ! NovaCheia(3,40000,Agencia, "Charles", "1765489012")
-    gerador ! NovaCheia(4,2750,Agencia, "Bianca", "1429807765")
+    gerador ! NovaVazia(1, Agencia, "Carlos", "4502308971", 1)
+    gerador ! NovaCheia(2,1000,Agencia, "Monica", "6547328218", 2)
+    gerador ! NovaCheia(3,40000,Agencia, "Charles", "1765489012", 3)
+    gerador ! NovaCheia(4,2750,Agencia, "Bianca", "1429807765", 1)
 
     println("Contas Iniciais: ")
     Await.result(Future{Agencia}, Duration.Inf).Banco.foreach((a) => println("Conta numero: " +a._1+ " tem saldo de: " + a._2 + " reais."))
@@ -179,9 +191,13 @@ object ProduzRelatorio {
             
             println("Insira seu cpf: ")
             val cpf = scala.io.StdIn.readLine
+            
+            println("Voce deseja ser um usuario premium? (Digite 2 para sim e 1 para nao)")
+            val premium = scala.io.StdIn.readInt
+            
 
-            if (valor == 0) gerador ! NovaVazia(cc, Agencia, nome, cpf)
-            else            gerador ! NovaCheia(cc, valor, Agencia, nome, cpf)
+            if (valor == 0) gerador ! NovaVazia(cc, Agencia, nome, cpf, premium)
+            else            gerador ! NovaCheia(cc, valor, Agencia, nome, cpf, premium)
           case 2 =>
             println("Digite o número da conta: ") // para acessar a conta
             cc = scala.io.StdIn.readInt() // precisa fazer a verificacao da conta (se ela já existe ou não)
