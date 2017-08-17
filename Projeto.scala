@@ -52,7 +52,6 @@ object ProduzRelatorio {
     }
     def Completa[A](ant:Int, x:A,f: A=>Int): String={
       val a = ((42-ant)-f(x))
-      println("f:"+f(x))
       def go(cont:Int,ret:String): String={
         if(cont==a) ret
         else go(cont+1,ret+"-")
