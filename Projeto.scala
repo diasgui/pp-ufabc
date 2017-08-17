@@ -39,19 +39,41 @@ object ProduzRelatorio {
     def Colocar(conta: Int, quantia: Double) = synchronized{  Banco = Banco + (conta -> quantia)  }
     def Colocar(conta: Int) = synchronized{  Banco = Banco + (conta -> 0)  }
     def Remover(conta: Int) = synchronized{  Banco = Banco - conta }
+    
+    def ContaInteiros(x:Int,ret:Int):Int ={
+      if(x/10>0){
+        ContaInteiros(x/10,ret+1)
+      }
+      else ret
+    }
+    def ContaDouble(x:Double,ret:Int): Int={
+      val int = ContaInteiros(x.toInt,ret)
+      int+1+((x.toString).replace(".",",").split(",").toList)(1).length
+    }
+    def Completa[A](ant:Int, x:A,f: A=>Int): String={
+      val a = ((42-ant)-f(x))
+      println("f:"+f(x))
+      def go(cont:Int,ret:String): String={
+        if(cont==a) ret
+        else go(cont+1,ret+"-")
+      }
+      " "+go(0,"")
+    }
     def Extrato(c:Int): Unit={
       val tipo = DadosBanco(c).tipo
       tipo match{
         case 1 =>{
-          println("--------- Extrato conta normal "+c+" ---------")
-          println("Saldo: "+ Consultar(c))
-          println("------------------------------------------")
+          println("-------------------------------------------")
+          println("------- Extrato conta normal "+c+Completa[Int](29,c, c=>ContaInteiros(c,1)))
+          println("-------- Saldo: R$"+ Consultar(c)+Completa[Double](18,Consultar(c), c=>ContaDouble(c,1)))
+          println("-------------------------------------------")
         }
         case 2 =>{
-          println("-------- Extrato conta premier "+c+" --------")
-          println("Nome: "+ DadosBanco(c).nome)
-          println("CPF: "+ DadosBanco(c).cpf)
-          println("Saldo: "+ Consultar(c))
+          println("-------------------------------------------")
+          println("-------- Extrato conta premier "+c+ Completa[Int](31,c, c=>ContaInteiros(c,1)))
+          println("-------- Nome: "+ DadosBanco(c).nome + Completa[String](15,DadosBanco(c).nome, c=>c.length))
+          println("-------- CPF: "+ DadosBanco(c).cpf + Completa[String](14,DadosBanco(c).cpf, c=>c.length))
+          println("-------- Saldo: R$"+ Consultar(c) + Completa[Double](18,Consultar(c), c=>ContaDouble(c,1)))
           println("-------------------------------------------")
         }
       }
